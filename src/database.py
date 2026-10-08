@@ -127,14 +127,105 @@ def update_note(
         ),
     )
 
-    connection.execute(
+    exsisting_concepts = connection.execute(
         """
-        DELETE FROM concepts WHERE note_id = ?
+        SELECT 
+            id,
+            heading,
+            content
+        FROM concepts
+        WHERE note_id = ?
         """,
         (note_id,),
-    )
+    ).fetchall()
 
-    insert_concept(connection, note_id, note)
+    exsisting_by_heading = {
+        concept['heading']: concept for concept in exsisting_concepts
+    }
+
+    new_headings = set()
+
+    for chunk in note.chunks:
+        new_headings.add(chunk.heading)
+
+        existing = exsisting_by_heading.get(
+            chunk.heading
+        )
+
+
+        # If the heading does not exist, insert it
+        if existing is None:
+            connection.execute(
+                """
+                INSERT INTO concepts (
+                    note_id,
+                    heading,
+                    content,
+                    position,
+                    embedding
+                ) VALUES (?, ?, ?, ?, NULL)
+                """,
+                (
+                    note_id,
+                    chunk.heading,
+                    chunk.content,
+                    chunk.position
+                ),
+            )
+
+            continue
+
+        # If the heading exists but the content has changed
+        if existing['content'] != chunk.content:
+            connection.execute(
+                """
+                UPDATE concepts
+                SET 
+                    content = ?,
+                    position = ?,
+                    embedding = NULL 
+                WHERE id = ?
+                """,
+                (
+                    chunk.content,
+                    chunk.position,
+                    existing['id']
+                ),
+            )
+        else:
+            # If the heading exists and the content has not changed, just update the position
+            connection.execute(
+                """
+                UPDATE concepts
+                SET 
+                    position = ?
+                WHERE id = ?
+                """,
+                (
+                    chunk.position,
+                    existing['id']
+                ),
+            )
+
+    for heading, existing in exsisting_by_heading.items():
+        
+        if heading not in new_headings:
+            connection.execute(
+                """
+                DELETE FROM concepts
+                WHERE id = ?
+                """,
+                (existing['id'],)
+            )
+
+    # connection.execute(
+    #     """
+    #     DELETE FROM concepts WHERE note_id = ?
+    #     """,
+    #     (note_id,),
+    # )
+
+    # insert_concept(connection, note_id, note)
 
 
 def sync_note(note: ParsedNote) -> str:

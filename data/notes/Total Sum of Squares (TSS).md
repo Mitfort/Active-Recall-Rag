@@ -23,3 +23,5 @@ $$
 
 ---
 Gdzie $\bar{y}$ jest średnią wartością dla zmiennej Y. 
+
+Bardzo istotny test..

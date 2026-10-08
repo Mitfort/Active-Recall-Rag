@@ -9,8 +9,16 @@ from src.embeddings import (
 
 from src.retrieval import semantic_search
 
+from src.context import build_context
+
+from src.generator import generate_question
+
 def main():
     initialize_database()
+
+    # =========
+    # INGESTION 
+    # ========= 
 
     notes: list[ParsedNote] = load_notes("data/notes")
     print(f"Loaded {len(notes)} notes from the directory.")
@@ -24,45 +32,93 @@ def main():
 
     print("=" * 60)
 
+    # =========
+    # EMBEDDING
+    # =========
+
     embedding_model = EmbeddingModel()
 
     generate_missing_embeddings(embedding_model)
 
+    # =========
+    # Quiz 
+    # =========
+
     while True:
         print()
 
-        query = input(
-            "Search your knowledge base"
+        topic = input(
+            "What do you want to practice?"
             "(or type 'exit' to quit): "
         )
 
-        if query.lower() == 'exit':
+        if topic.lower() == 'exit':
             break
 
+        # RETRIEVE
+
         results = semantic_search(
-            query=query,
+            query=topic,
             embedding_model=embedding_model,
             top_k=3
         )
 
-        print("\nResults:\\n")
+        print("\nRetrieved results:\\n")
 
-        for index, result in enumerate(results, start=1):
+        for result in results:
             print(
-                f"{index}."
+                f"- [{result['id']}] "
                 f"{result['heading']}"
+                f"({result['score']:.4f})"
             )
 
-            print(f"Note: {result['note']}")
+        # BUILD CONTEXT
 
-            print(
-                f"Similarity: "
-                f"{result['score']:.4f}"
-            )
+        context = build_context(results)
 
-            print()
+        # GENERATE QUESTION
 
-            print(result['content'])
+        question = generate_question(
+            context=context,
+            topic=topic
+        )
+
+        print(
+            "\n"
+            + "=" * 60
+        )
+
+        print("\nQUESTION\n")
+
+        print(question.question)
+
+        print()
+
+        input(
+            "Thinl about your answer"
+            "and press ENTER..."
+        )
+
+        print("\nEXPECTED ANSWER\n")
+
+        print(question.expected_answer)
+
+        print()
+
+        print(
+            f"Difficulty:"
+            f"{question.dificulty}/5"
+        )
+
+        print(
+            f"Type: "
+            f"{question.question_type}"
+        )
+
+        print(
+            f"Concept IDs: "
+            f"{question.concept_ids}"
+        )
 
 if __name__ == "__main__":
     main()
