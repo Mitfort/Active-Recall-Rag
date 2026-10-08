@@ -42,6 +42,15 @@ def initialize_database() -> None:
 
         connection.commit()
 
+        try:
+            connection.execute(
+                """
+                ALTER TABLE concepts
+                ADD COLUMN embedding TEXT
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
 
 def get_note_by_file_path(
         connection: sqlite3.Connection,
@@ -153,6 +162,17 @@ def sync_note(note: ParsedNote) -> str:
         return "updated"
 
 def get_all_concepts() -> list[sqlite3.Row]:
+    """
+    Retrieve all concepts from the database, along with their associated note titles.
+        A list of sqlite3.Row objects
+
+    Each row contains the following fields:
+        - id: The unique identifier of the concept.
+        - note_title: The title of the note associated with the concept.
+        - heading: The heading of the concept.
+        - content: The content of the concept.
+    """
+
     with get_connection() as connection:
 
         rows = connection.execute(
@@ -169,4 +189,88 @@ def get_all_concepts() -> list[sqlite3.Row]:
         ).fetchall()
 
     return rows
-    
+
+def get_concepts_without_embedding() -> list[sqlite3.Row]:
+    """
+    Retrieve all concepts from the database that do not have an embedding.
+        A list of sqlite3.Row objects
+
+    Each row contains the following fields:
+        - id: The unique identifier of the concept.
+        - note_title: The title of the note associated with the concept.
+        - heading: The heading of the concept.
+        - content: The content of the concept.
+    """
+
+    with get_connection() as connection:
+
+        rows = connection.execute(
+           """
+            SELECT
+                id,
+                heading,
+                content
+            FROM concepts
+            WHERE embedding IS NULL
+            """
+        ).fetchall()
+
+    return rows
+
+def save_embedding(concept_id: int, embedding: list[float]) -> None:
+    """
+    Save the embedding for a concept in the database.
+
+    Args:
+        concept_id (int): The unique identifier of the concept.
+        embedding (list[float]): The embedding vector to be saved.
+    """
+
+    import json 
+
+    embedding_json = json.dumps(embedding)
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE concepts
+            SET embedding = ?
+            WHERE id = ?
+            """,
+            (
+                embedding_json,
+                concept_id
+            )
+        )
+        connection.commit()
+
+def get_concepts_with_embeddings() -> list[sqlite3.Row]:
+    """
+    Retrieve all concepts from the database that have an embedding.
+        A list of sqlite3.Row objects
+
+    Each row contains the following fields:
+        - id: The unique identifier of the concept.
+        - note_title: The title of the note associated with the concept.
+        - heading: The heading of the concept.
+        - content: The content of the concept.
+        - embedding: The embedding vector of the concept.
+    """
+
+    with get_connection() as connection:
+
+        rows = connection.execute(
+            """
+            SELECT
+                concepts.id,
+                concepts.heading,
+                concepts.content,
+                concepts.embedding,
+                notes.title as note_title
+            FROM concepts
+            JOIN notes ON concepts.note_id = notes.id
+            WHERE concepts.embedding IS NOT NULL
+            """
+        ).fetchall()
+
+    return rows

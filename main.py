@@ -2,6 +2,13 @@ from src.ingestion import load_notes, NoteChunk, ParsedNote
 
 from src.database import initialize_database, sync_note, get_all_concepts
 
+from src.embeddings import (
+    EmbeddingModel,
+    generate_missing_embeddings
+)
+
+from src.retrieval import semantic_search
+
 def main():
     initialize_database()
 
@@ -16,21 +23,46 @@ def main():
         print(f"File: {note.file_name} - Status: {status}")
 
     print("=" * 60)
-    print(f"\\nConcepts in database:")
-    concepts = get_all_concepts()
 
-    for concept in concepts: 
-        print("=" * 30)
+    embedding_model = EmbeddingModel()
 
-        print(f"ID: {concept['id']}")
-        print(f"Note: {concept['note_title']}")
-        print(f"Concept: {concept['heading']}")
+    generate_missing_embeddings(embedding_model)
 
+    while True:
         print()
 
-        print(concept['content'])
+        query = input(
+            "Search your knowledge base"
+            "(or type 'exit' to quit): "
+        )
 
-        print()
+        if query.lower() == 'exit':
+            break
+
+        results = semantic_search(
+            query=query,
+            embedding_model=embedding_model,
+            top_k=3
+        )
+
+        print("\nResults:\\n")
+
+        for index, result in enumerate(results, start=1):
+            print(
+                f"{index}."
+                f"{result['heading']}"
+            )
+
+            print(f"Note: {result['note']}")
+
+            print(
+                f"Similarity: "
+                f"{result['score']:.4f}"
+            )
+
+            print()
+
+            print(result['content'])
 
 if __name__ == "__main__":
     main()
