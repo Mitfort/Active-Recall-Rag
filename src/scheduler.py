@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta 
+import math 
+
+TARGET_RETRIEVABILITY = 0.9
 
 def calculate_next_review(
         rating:int,
@@ -138,3 +141,114 @@ def calculate_learning_score(
         rating = 5
 
     return (combined_score, rating)
+
+def calculate_retrievability(
+        last_review: datetime | str | None,
+        stability_days: float,
+        now: datetime | None = None
+) -> float: 
+    """
+    Returns estimated probability of recalling
+    the concept right now.
+
+    stability_days means:
+    after this many days, retrievability falls
+    to TARGET_RETRIEVABILITY.
+    """
+
+    if last_review is None:
+        return 0.0
+
+    if isinstance(last_review, str):
+        last_review = datetime.fromisoformat(last_review)
+
+    if now is None:
+        now = datetime.now()
+
+    elapsed = now - last_review
+
+    elapsed_days = max(
+        0.0, 
+        elapsed.total_seconds() / 86400
+    )
+
+    stability_days = max(
+        0.1, 
+        stability_days
+    )
+
+    retrievability = math.exp(
+        math.log(TARGET_RETRIEVABILITY) 
+        * elapsed_days / stability_days
+    )
+
+    return max(0.0, min(retrievability, 1.0))
+
+def update_memory_state(
+    current_mastery: float,
+    current_stability: float,
+    combined_score: float,
+) -> tuple[float, float, datetime]:
+    """
+    Update mastery and memory stabbility 
+    based on answer quality    
+    """
+
+    current_stability = max(
+        1.0, 
+        current_stability
+    )
+
+    # Failure
+
+    if combined_score < 0.35: 
+        mastery_change = -0.10
+        stability_multiplier = 0.5
+
+    # HARD 
+
+    elif combined_score < 0.5:
+        mastery_change = 0.05
+        stability_multiplier = 1.2
+
+    # GOOD
+    
+    elif combined_score < 0.65:
+        mastery_change = 0.10
+        stability_multiplier = 1.5
+
+    # EASY
+    
+    elif combined_score < 0.85:
+        mastery_change = 0.15
+        stability_multiplier = 2.0
+
+    # PERFECT
+    
+    else:
+        mastery_change = 0.20
+        stability_multiplier = 3.0
+
+    new_mastery = current_mastery + mastery_change
+
+    new_mastery = max(
+        0.0,
+        min(1.0, new_mastery)
+    )
+
+    new_stability = current_stability * stability_multiplier
+
+    # Limits 
+
+    new_stability = max(
+        1.0,
+        min(365.0, new_stability)
+    )
+
+    next_review = datetime.now() + timedelta(days=new_stability)
+
+    return (
+        new_mastery,
+        new_stability,
+        next_review
+    )

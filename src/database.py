@@ -134,6 +134,16 @@ def initialize_database() -> None:
             except sqlite3.OperationalError:
                 pass
 
+        try:
+            connection.execute(
+                """
+                ALTER TABLE learning_state
+                ADD COLUMN stability_days REAL NOT NULL DEFAULT 1.0
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
 
 
 def get_note_by_file_path(
@@ -491,8 +501,10 @@ def save_review(
     expected_answer: str,
     user_answer: str,
     rating: int,
+    
     new_mastery: float,
     next_review: datetime,
+    new_stability: float,
 
     ai_correctness:float | None = None,
     ai_feedback:str | None = None,
@@ -558,6 +570,7 @@ def save_review(
             
             SET 
                 mastery = ?,
+                stability_days = ?,
                 review_count = review_count + 1,
                 correct_count = correct_count + ?,
                 last_reviewed = CURRENT_TIMESTAMP,
@@ -566,6 +579,7 @@ def save_review(
             """,
             (
                 new_mastery,
+                new_stability,
                 correct_increment,
                 next_review.isoformat(),
                 concept_id
@@ -597,6 +611,7 @@ def get_all_learning_states() -> list[sqlite3.Row]:
                 notes.title AS note,
                 concepts.heading,
                 learning_state.mastery,
+                learning_state.stability_days,
                 learning_state.review_count,
                 learning_state.correct_count,
                 learning_state.last_reviewed,

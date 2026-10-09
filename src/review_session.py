@@ -11,8 +11,8 @@ from src.context import build_context
 from src.generator import generate_question
 
 from src.scheduler import (
-    calculate_next_review,
-    calculate_learning_score
+    calculate_learning_score,
+    update_memory_state
 )
 
 from src.evaluator import evaluate_answer
@@ -169,9 +169,10 @@ def run_daily_review(embedding_model, limit:int = 10):
 
         state = get_learning_state(concept_id)
 
-        new_mastery, next_review = calculate_next_review(
-            rating=rating,
-            current_mastery=state['mastery']
+        new_mastery, new_stability, next_review = update_memory_state(
+            current_mastery=state['mastery'],
+            current_stability=state['stability_days'],
+            combined_score=combined_score
         )
 
         save_review(
@@ -180,7 +181,9 @@ def run_daily_review(embedding_model, limit:int = 10):
             expected_answer=question.expected_answer,
             user_answer=user_answer,
             rating=rating,
+
             new_mastery=new_mastery,
+            new_stability=new_stability,
             next_review=next_review,
 
             ai_correctness=evaluation.correctness,
@@ -197,6 +200,13 @@ def run_daily_review(embedding_model, limit:int = 10):
             f"{state['mastery']:.0%}"
             f" -> "
             f"{new_mastery:.0%}"
+        )
+
+        print(
+            f"Stability:"
+            f"{state['stability_days']} days"
+            f" -> "
+            f"{new_stability:.0f} days"
         )
 
         print(
