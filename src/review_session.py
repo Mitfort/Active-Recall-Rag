@@ -10,7 +10,12 @@ from src.context import build_context
 
 from src.generator import generate_question
 
-from src.scheduler import calculate_next_review
+from src.scheduler import (
+    calculate_next_review,
+    calculate_learning_score
+)
+
+from src.evaluator import evaluate_answer
 
 
 def run_daily_review(embedding_model, limit:int = 10):
@@ -79,30 +84,85 @@ def run_daily_review(embedding_model, limit:int = 10):
         # User anwer
         user_answer = input("\nYour answer: \n")
 
+        print("\nEvaluating your answer...\n")
+
+        # Evaluate answer
+        evaluation = evaluate_answer(
+            question=question.question,
+            expected_answer=question.expected_answer,
+            student_answer=user_answer,
+            context=context
+        )
+
+        print(
+            "\n" + "=" * 30 + "\n"
+        )
+
+        print("EVALUATION\n")
+
+        print(
+            f"Correctness Score: "
+            f"{evaluation.correctness:.0%}"
+        )
+
+        print(
+            f"Verdict: "
+            f"{evaluation.verdict}"
+        )
+
+        if evaluation.missing_points:
+            print(
+                "\nMissing Points:\n")
+
+            for point in evaluation.missing_points:
+                print(f"- {point}")
+
+        if evaluation.missconceptions:
+            print(
+                "\nMisconceptions:\n")
+
+            for misconception in evaluation.missconceptions:
+                print(f"- {misconception}")
+
+        print(
+            "\nFeedback:\n"
+            f"{evaluation.feedback}"
+        )
+
         # Expected answer 
 
         print("\nExpected answer: \n")
         print(question.expected_answer)
 
-        # Feedback
-
-        print("""
-        How well did you know it? 
-        1 - Again
-        2 - Hard
-        3 - Good 
-        4 - Easy
-        5 - Perfect
-        """)
+        # Confidence rating
+        print(
+            """
+            How confident were you BEFORE seeing the answer? 
+            1 - Guessed / Very unsure
+            2 - Unsure
+            3 - Fairly confident
+            4 - Very confident
+            5 - Completely confident
+            """
+        )
 
         while True:
             try:
-                user_feedback = int(input("Your feedback (1-5): "))
-                if user_feedback < 1 or user_feedback > 5:
-                    raise ValueError
+                confidence = int(input("Confidence: "))
+
+                if confidence < 1 or confidence > 5:
+                    raise ValueError(
+                        "Confidence must be between 1 and 5."
+                    )
                 break
-            except ValueError:
-                print("Invalid input. Please enter a number between 1 and 5.")
+            except ValueError as e:
+                print(f"Invalid input: {e}. Please enter a number between 1 and 5.")
+
+        combined_score, rating = calculate_learning_score(
+            correctness=evaluation.correctness,
+            confidence=confidence,
+            difficulty=question.dificulty
+        )
 
         # Update learning state
         concept_id = concept['id']
@@ -110,7 +170,7 @@ def run_daily_review(embedding_model, limit:int = 10):
         state = get_learning_state(concept_id)
 
         new_mastery, next_review = calculate_next_review(
-            rating=user_feedback,
+            rating=rating,
             current_mastery=state['mastery']
         )
 
@@ -119,9 +179,17 @@ def run_daily_review(embedding_model, limit:int = 10):
             question=question.question,
             expected_answer=question.expected_answer,
             user_answer=user_answer,
-            rating=user_feedback,
+            rating=rating,
             new_mastery=new_mastery,
-            next_review=next_review
+            next_review=next_review,
+
+            ai_correctness=evaluation.correctness,
+            ai_feedback=evaluation.feedback,
+            missing_points=evaluation.missing_points,
+            misconceptions=evaluation.missconceptions,
+
+            user_confidence=confidence,
+            combined_score=combined_score
         )
 
         print(
@@ -140,4 +208,3 @@ def run_daily_review(embedding_model, limit:int = 10):
 
     print("REVIEW SESSION COMPLETED")
 
-    

@@ -5,6 +5,8 @@ from src.ingestion import ParsedNote
 
 from datetime import datetime
 
+import json 
+
 DATABASE_PATH = Path(__file__).parent.parent / "data/learning.db"
 
 def get_connection() -> sqlite3.Connection:
@@ -93,6 +95,46 @@ def initialize_database() -> None:
             )
         except sqlite3.OperationalError:
             pass
+
+        columns = [
+            (
+                "ai_correctness",
+                "REAL"
+            ),
+            (
+                "ai_feedback",
+                "TEXT"
+            ),
+            (
+                "missing_points",
+                "TEXT"
+            ),
+            (
+                "misconceptions",
+                "TEXT"
+            ),
+            (
+                "user_confidence",
+                "INTEGER"
+            ),
+            (
+                "combined_score",
+                "REAL"
+            ),
+        ]
+
+        for column_name, column_type in columns:
+            try:
+                connection.execute(
+                    f"""
+                    ALTER TABLE reviews
+                    ADD COLUMN {column_name} {column_type}
+                    """
+                )
+            except sqlite3.OperationalError:
+                pass
+
+
 
 def get_note_by_file_path(
         connection: sqlite3.Connection,
@@ -451,9 +493,21 @@ def save_review(
     rating: int,
     new_mastery: float,
     next_review: datetime,
+
+    ai_correctness:float | None = None,
+    ai_feedback:str | None = None,
+
+    missing_points:list[str] | None = None,
+    misconceptions:list[str] | None = None,
+
+    user_confidence:int | None = None,
+    combined_score:float | None = None
 ) -> None:
 
     ensure_learning_state(concept_id)
+
+    missing_points_json = json.dumps(missing_points or []) 
+    missconceptions_json = json.dumps(misconceptions or [])
 
     with get_connection() as connection:
 
@@ -464,15 +518,33 @@ def save_review(
                 question,
                 expected_answer,
                 user_answer,
-                rating
-            ) VALUES (?, ?, ?, ?, ?)
+                rating,
+
+                ai_correctness,
+                ai_feedback,
+                missing_points,
+                misconceptions,
+
+                user_confidence,
+                combined_score
+            ) VALUES (?, ?, ?, ?, ?, 
+                      ?, ?, ?, ?, 
+                      ?, ?)
             """,
             (
                 concept_id,
                 question,
                 expected_answer,
                 user_answer,
-                rating
+                rating,
+
+                ai_correctness,
+                ai_feedback,
+                missing_points_json,
+                missconceptions_json,
+
+                user_confidence,
+                combined_score
             )
         )
 

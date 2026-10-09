@@ -65,3 +65,76 @@ def calculate_next_review(
     next_review = datetime.now() + timedelta(days=interval_days)
 
     return new_mastery, next_review
+
+def calculate_learning_score(
+        correctness:float,
+        confidence:int,
+        difficulty:int
+) -> tuple[float, int]:
+    """
+    correctness:
+        AI evaluation 0-1
+
+    confidence:
+        1 = guessed / very unsure
+        2 = unsure
+        3 = fairly confident
+        4 = very confident
+        5 = completely confident
+
+    difficulty:
+        question difficulty 1-5
+
+    Returns:
+        combined_score
+        scheduler_rating
+    """
+
+    if confidence < 1 or confidence > 5:
+        raise ValueError(
+            "Confidence must be between 1 and 5."
+        )
+
+    if difficulty < 1 or difficulty > 5:
+        raise ValueError(
+            "Difficulty must be between 1 and 5."
+        )
+
+    confidence_score = (confidence - 1) / 3
+
+    # Harder question gives small bonus
+    # difficulty 1 -> -0.08
+    # difficulty 3 -> 0
+    # difficulty 5 -> +0.08
+
+    difficulty_adjustment = (difficulty - 3) * 0.04
+
+    adjusted_corectness = correctness + difficulty_adjustment
+
+    adjusted_corectness = max(
+        0.0,
+        min(adjusted_corectness, 1.0)
+    )
+
+    # AI has more weight than self-assessment
+
+    combined_score = (
+        0.8 * adjusted_corectness + 
+        0.2 * confidence_score
+    )
+
+    # Confidence cannot save a completly
+    # wrong answer 
+
+    if correctness < 0.35:
+        rating = 1
+    elif combined_score < 0.5:
+        rating = 2
+    elif combined_score < 0.65:
+        rating = 3
+    elif combined_score < 0.85:
+        rating = 4
+    else:
+        rating = 5
+
+    return (combined_score, rating)
