@@ -1,6 +1,11 @@
 from src.ingestion import load_notes, NoteChunk, ParsedNote
 
-from src.database import initialize_database, sync_note, get_all_concepts
+from src.database import (
+    initialize_database, 
+    sync_note, 
+    get_learning_state,
+    save_review
+)
 
 from src.embeddings import (
     EmbeddingModel,
@@ -12,6 +17,10 @@ from src.retrieval import semantic_search
 from src.context import build_context
 
 from src.generator import generate_question
+
+from src.scheduler import calculate_next_review
+
+
 
 def main():
     initialize_database()
@@ -94,9 +103,8 @@ def main():
 
         print()
 
-        input(
-            "Thinl about your answer"
-            "and press ENTER..."
+        user_answer = input(
+            "Your answer:\n"
         )
 
         print("\nEXPECTED ANSWER\n")
@@ -105,20 +113,72 @@ def main():
 
         print()
 
-        print(
-            f"Difficulty:"
-            f"{question.dificulty}/5"
+        print("""
+            How well did you answer the question?
+            1 = "Again"
+            2 = "Hard"
+            3 = "Good"
+            4 = "Easy"
+            5 = "Very Easy"
+            """
         )
 
-        print(
-            f"Type: "
-            f"{question.question_type}"
-        )
+        while True:
+            try: 
+                rating = int(input("Rating (1-5): "))
+                if 1 <= rating <= 5:
+                    break
+                else:
+                    print("Please enter a number between 1 and 5.")
+            except ValueError:
+                print("Please enter a valid number.")
 
-        print(
-            f"Concept IDs: "
-            f"{question.concept_ids}"
-        )
+        for concept_id in question.concept_ids:
+
+            state = get_learning_state(concept_id)
+
+            new_mastery, next_review_date = calculate_next_review(
+                rating=rating,
+                current_mastery=state['mastery']
+            )
+
+            save_review(
+                concept_id=concept_id,
+                question=question.question,
+                expected_answer=question.expected_answer,
+                user_answer=user_answer,
+                rating=rating,
+                new_mastery=new_mastery,
+                next_review = next_review_date
+            )
+
+            print(f"\nConcept {concept_id}")
+
+            print(
+                f"Mastery: "
+                f"{state['mastery']:.2f} -> "
+                f"{new_mastery:.2f}"
+            )
+
+            print(
+                f"Next Review: "
+                f"{next_review_date.date()}"
+            )
+
+        # print(
+        #     f"Difficulty:"
+        #     f"{question.dificulty}/5"
+        # )
+
+        # print(
+        #     f"Type: "
+        #     f"{question.question_type}"
+        # )
+
+        # print(
+        #     f"Concept IDs: "
+        #     f"{question.concept_ids}"
+        # )
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,8 @@ from pathlib import Path
 
 from src.ingestion import ParsedNote
 
+from datetime import datetime
+
 DATABASE_PATH = Path(__file__).parent.parent / "data/learning.db"
 
 def get_connection() -> sqlite3.Connection:
@@ -39,6 +41,42 @@ def initialize_database() -> None:
                     ON DELETE CASCADE
                 )
             """)
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS learning_state (
+                concept_id INTEGER PRIMARY KEY,
+                mastery REAL NOT NULL DEFAULT 0.0,
+                
+                review_count INTEGER NOT NULL DEFAULT 0,
+                correct_count INTEGER NOT NULL DEFAULT 0,
+                
+                last_reviewed DATETIME,
+                next_review DATETIME,
+                
+                FOREIGN KEY (concept_id)
+                    REFERENCES concepts(id)
+                    ON DELETE CASCADE
+                )
+            """)
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                concept_id INTEGER NOT NULL,
+                
+                question TEXT NOT NULL,
+                expected_answer TEXT NOT NULL,
+                
+                user_answer TEXT,
+                rating INTEGER NOT NULL,
+
+                reviewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (concept_id)
+                    REFERENCES concepts(id)
+                    ON DELETE CASCADE
+                )
+        """)
 
         connection.commit()
 
@@ -361,6 +399,139 @@ def get_concepts_with_embeddings() -> list[sqlite3.Row]:
             FROM concepts
             JOIN notes ON concepts.note_id = notes.id
             WHERE concepts.embedding IS NOT NULL
+            """
+        ).fetchall()
+
+    return rows
+
+def ensure_learning_state(concept_id: int) -> None:
+    """
+    Ensure that a learning state entry exists for the given concept ID.
+    If it does not exist, create a new entry with default values.
+
+    Args:
+        concept_id (int): The unique identifier of the concept.
+    """
+
+    with get_connection() as connection:
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO learning_state (concept_id)
+            VALUES (?)
+            """,
+            (concept_id,)
+        )
+
+        connection.commit()
+
+def get_learning_state(concept_id: int) -> sqlite3.Row:
+
+    ensure_learning_state(concept_id)
+
+    with get_connection() as connection:
+
+        return connection.execute(
+            """
+            SELECT * FROM learning_state
+            WHERE concept_id = ?
+            """,
+            (concept_id,)
+        ).fetchone()
+
+def save_review(
+    concept_id: int,
+    question: str,
+    expected_answer: str,
+    user_answer: str,
+    rating: int,
+    new_mastery: float,
+    next_review: datetime,
+) -> None:
+
+    ensure_learning_state(concept_id)
+
+    with get_connection() as connection:
+
+        connection.execute(
+            """
+            INSERT INTO reviews (
+                concept_id,
+                question,
+                expected_answer,
+                user_answer,
+                rating
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                concept_id,
+                question,
+                expected_answer,
+                user_answer,
+                rating
+            )
+        )
+
+        correct_increment = (
+            1 if rating >= 3 else 0
+        )
+
+        connection.execute(
+            """
+            UPDATE learning_state
+            
+            SET 
+                mastery = ?,
+                review_count = review_count + 1,
+                correct_count = correct_count + ?,
+                last_reviewed = CURRENT_TIMESTAMP,
+                next_review = ?
+            WHERE concept_id = ?
+            """,
+            (
+                new_mastery,
+                correct_increment,
+                next_review.isoformat(),
+                concept_id
+            )
+        )
+
+        connection.commit()
+
+def get_all_learning_states() -> list[sqlite3.Row]:
+    """
+    Retrieve all learning states from the database.
+        A list of sqlite3.Row objects
+
+    Each row contains the following fields:
+        - concept_id: The unique identifier of the concept.
+        - mastery: The current mastery level of the concept.
+        - review_count: The total number of reviews for the concept.
+        - correct_count: The total number of correct reviews for the concept.
+        - last_reviewed: The timestamp of the last review for the concept.
+        - next_review: The timestamp of the next scheduled review for the concept.
+    """
+
+    with get_connection() as connection:
+
+        rows = connection.execute(
+            """
+            SELECT 
+                concepts.id,
+                notes.title AS note,
+                concepts.heading,
+                learning_state.mastery,
+                learning_state.review_count,
+                learning_state.correct_count,
+                learning_state.last_reviewed,
+                learning_state.next_review
+            FROM learning_state
+
+            JOIN concepts ON learning_state.concept_id = concepts.id
+            JOIN notes ON notes.id = concepts.note_id
+
+            ORDER BY 
+                learning_state.mastery ASC
             """
         ).fetchall()
 
