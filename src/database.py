@@ -14,6 +14,10 @@ def get_connection() -> sqlite3.Connection:
 
     connection.row_factory = sqlite3.Row
 
+    connection.execute(
+        "PRAGMA foreign_keys = ON"
+    )
+
     return connection
 
 def initialize_database() -> None:
@@ -536,3 +540,70 @@ def get_all_learning_states() -> list[sqlite3.Row]:
         ).fetchall()
 
     return rows
+
+def get_daily_review_concepts(
+        limit: int = 10 
+):
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT 
+                concepts.id,
+                concepts.heading,
+                concepts.content,
+                notes.title AS note,
+
+                COALESCE (
+                    learning_state.mastery,
+                    0.0
+                ) AS mastery,
+
+                COALESCE (
+                    learning_state.review_count,
+                    0
+                ) AS review_count,
+
+                learning_state.last_reviewed,
+                learning_state.next_review
+
+            FROM concepts
+
+            JOIN notes ON notes.id = concepts.note_id
+
+            LEFT JOIN learning_state ON learning_state.concept_id = concepts.id
+        
+            WHERE 
+                learning_state.next_review IS NULL
+                OR datetime(learning_state.next_review) <= datetime('now')
+
+            ORDER BY
+                CASE 
+                    WHEN learning_state.next_review IS NULL
+                    THEN 0
+                    ELSE 1
+                END,
+
+                mastery ASC,
+                learning_state.next_review ASC
+            LIMIT ? 
+            """,
+            (limit,),
+        ).fetchall()
+
+def get_concept(concept_id: int) -> sqlite3.Row:
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT 
+                concepts.id,
+                concepts.heading,
+                concepts.content,
+                notes.title AS note,
+            FROM concepts
+
+            JOIN notes ON notes.id = concepts.note_id
+
+            WHERE concepts.id = ?
+            """,
+            (concept_id,)
+        ).fetchone()

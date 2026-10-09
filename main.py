@@ -20,6 +20,7 @@ from src.generator import generate_question
 
 from src.scheduler import calculate_next_review
 
+from src.review_session import run_daily_review
 
 
 def main():
@@ -55,115 +56,78 @@ def main():
 
     while True:
         print()
-
-        topic = input(
-            "What do you want to practice?"
-            "(or type 'exit' to quit): "
-        )
-
-        if topic.lower() == 'exit':
-            break
-
-        # RETRIEVE
-
-        results = semantic_search(
-            query=topic,
-            embedding_model=embedding_model,
-            top_k=3
-        )
-
-        print("\nRetrieved results:\\n")
-
-        for result in results:
-            print(
-                f"- [{result['id']}] "
-                f"{result['heading']}"
-                f"({result['score']:.4f})"
-            )
-
-        # BUILD CONTEXT
-
-        context = build_context(results)
-
-        # GENERATE QUESTION
-
-        question = generate_question(
-            context=context,
-            topic=topic
-        )
-
-        print(
-            "\n"
-            + "=" * 60
-        )
-
-        print("\nQUESTION\n")
-
-        print(question.question)
-
-        print()
-
-        user_answer = input(
-            "Your answer:\n"
-        )
-
-        print("\nEXPECTED ANSWER\n")
-
-        print(question.expected_answer)
-
-        print()
-
         print("""
-            How well did you answer the question?
-            1 = "Again"
-            2 = "Hard"
-            3 = "Good"
-            4 = "Easy"
-            5 = "Very Easy"
-            """
+        ========================================
+
+        ACTIVE RECALL
+
+        1 - Daily Review
+        2 - Practice a topic
+        3 - Exit
+
+        ========================================
+        """
         )
 
-        while True:
-            try: 
-                rating = int(input("Rating (1-5): "))
-                if 1 <= rating <= 5:
-                    break
-                else:
-                    print("Please enter a number between 1 and 5.")
-            except ValueError:
-                print("Please enter a valid number.")
+        choice = input("Choose: ")
 
-        for concept_id in question.concept_ids:
-
-            state = get_learning_state(concept_id)
-
-            new_mastery, next_review_date = calculate_next_review(
-                rating=rating,
-                current_mastery=state['mastery']
+        if choice == "1":
+            run_daily_review(embedding_model,limit=10)
+        elif choice == "2":
+            topic = input(
+                "What do you want to practice?"
+                "(or type 'exit' to quit): "
             )
 
-            save_review(
-                concept_id=concept_id,
-                question=question.question,
-                expected_answer=question.expected_answer,
-                user_answer=user_answer,
-                rating=rating,
-                new_mastery=new_mastery,
-                next_review = next_review_date
+            if topic.lower() == 'exit':
+                break
+
+            # RETRIEVE
+
+            results = semantic_search(
+                query=topic,
+                embedding_model=embedding_model,
+                top_k=3
             )
 
-            print(f"\nConcept {concept_id}")
+            print("\nRetrieved results:\\n")
+
+            for result in results:
+                print(
+                    f"- [{result['id']}] "
+                    f"{result['heading']}"
+                    f"({result['score']:.4f})"
+                )
+
+            # BUILD CONTEXT
+
+            context = build_context(results)
+
+            # GENERATE QUESTION
+
+            question = generate_question(
+                context=context,
+                topic=topic
+            )
 
             print(
-                f"Mastery: "
-                f"{state['mastery']:.2f} -> "
-                f"{new_mastery:.2f}"
+                "\n"
+                + "=" * 60
             )
 
-            print(
-                f"Next Review: "
-                f"{next_review_date.date()}"
-            )
+            print("\nQUESTION\n")
+
+            print(question.question)
+
+            print()
+
+            print("\nEXPECTED ANSWER\n")
+
+            print(question.expected_answer)
+
+        elif choice == "3":
+            print("Exiting...")
+            break
 
         # print(
         #     f"Difficulty:"
