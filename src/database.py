@@ -144,6 +144,16 @@ def initialize_database() -> None:
         except sqlite3.OperationalError:
             pass
 
+        try:
+            connection.execute(
+                """
+                ALTER TABLE reviews
+                ADD COLUMN source_provenance TEXT
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
 
 
 def get_note_by_file_path(
@@ -513,13 +523,16 @@ def save_review(
     misconceptions:list[str] | None = None,
 
     user_confidence:int | None = None,
-    combined_score:float | None = None
+    combined_score:float | None = None,
+
+    source_provenance: list[dict] | None = None
 ) -> None:
 
     ensure_learning_state(concept_id)
 
     missing_points_json = json.dumps(missing_points or []) 
     missconceptions_json = json.dumps(misconceptions or [])
+    source_provenance_json = json.dumps(source_provenance or [])
 
     with get_connection() as connection:
 
@@ -538,10 +551,12 @@ def save_review(
                 misconceptions,
 
                 user_confidence,
-                combined_score
+                combined_score,
+
+                source_provenance
             ) VALUES (?, ?, ?, ?, ?, 
                       ?, ?, ?, ?, 
-                      ?, ?)
+                      ?, ?, ? )
             """,
             (
                 concept_id,
@@ -556,7 +571,9 @@ def save_review(
                 missconceptions_json,
 
                 user_confidence,
-                combined_score
+                combined_score,
+
+                source_provenance_json
             )
         )
 
@@ -650,6 +667,11 @@ def get_daily_review_concepts(
                     0
                 ) AS review_count,
 
+                COALESCE (
+                    learning_state.stability_days,
+                    1.0
+                ) AS stability_days,
+
                 learning_state.last_reviewed,
                 learning_state.next_review
 
@@ -693,4 +715,79 @@ def get_concept(concept_id: int) -> sqlite3.Row:
             WHERE concepts.id = ?
             """,
             (concept_id,)
+        ).fetchone()
+
+def get_recent_reviews(
+        concept_id: int,
+        limit: int = 5
+) -> list[sqlite3.Row]:
+
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT 
+                id,
+                question,
+                user_answer,
+                rating,
+                
+                ai_correctness,
+
+                missing_points,
+                misconceptions,
+
+                user_confidence,
+                combined_score,
+                reviewed_at
+
+            FROM reviews
+            WHERE concept_id = ?
+            ORDER BY reviewed_at DESC
+            LIMIT ?
+            """,
+            (concept_id, limit)
+        ).fetchall()
+
+def get_all_concepts_with_state() -> list[sqlite3.Row]:
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                concepts.id,
+                concepts.heading,
+                concepts.content,
+
+                notes.title AS note,
+
+                COALESCE(learning_state.mastery, 0.0) AS mastery,
+
+                COALESCE(learning_state.stability_days, 1.0) AS stability_days,
+
+                COALESCE(learning_state.review_count, 0) AS review_count,
+
+                learning_state.last_reviewed,
+                learning_state.next_review
+            FROM concepts
+
+            JOIN notes ON notes.id = concepts.note_id
+            LEFT JOIN learning_state ON learning_state.concept_id = concepts.id
+
+            ORDER BY
+                notes.title,
+                concepts.position
+            
+            """).fetchall()
+
+def get_review(
+        review_id: int
+) -> sqlite3.Row:
+
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT * 
+            FROM reviews
+            WHERE id = ? 
+            """,
+            (review_id)
         ).fetchone()
