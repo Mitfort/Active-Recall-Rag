@@ -84,6 +84,33 @@ def initialize_database() -> None:
                 )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS review_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                
+                concept_id INTEGER NOT NULL,
+                
+                question TEXT NOT NULL,
+                expected_answer TEXT NOT NULL,
+
+                difficulty INTEGER NOT NULL,
+                question_type TEXT NOT NULL,
+
+                context TEXT NOT NULL,
+
+                sources TEXT NOT NULL,
+
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                completed_at DATETIME,
+
+                FOREIGN KEY (concept_id)
+                    REFERENCES concepts(id)
+                    ON DELETE CASCADE
+                )
+            """
+        )
+        
         connection.commit()
 
         try:
@@ -791,3 +818,163 @@ def get_review(
             """,
             (review_id)
         ).fetchone()
+
+def create_review_attempt(
+    concept_id: int,
+    question: str,
+    expected_answer: str,
+    difficulty: int,
+    question_type: str,
+    context: str,
+    sources: list[dict]
+) -> int:
+    import json 
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO review_attempts (
+                concept_id,
+                question,
+                expected_answer,
+                difficulty,
+                question_type,
+                context,
+                sources
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                concept_id,
+                question,
+                expected_answer,
+                difficulty,
+                question_type,
+                context,
+                json.dumps(sources)
+            )
+        )
+
+        connection.commit()
+
+        return cursor.lastrowid
+
+
+def get_review_attempt(
+    attempt_id: int
+) -> sqlite3.Row:
+
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT * 
+            FROM review_attempts
+            WHERE id = ?
+            AND completed_at IS NULL
+            """,
+            (attempt_id,)
+        ).fetchone()
+
+def complete_review_attempt(
+    attempt_id: int
+) -> None:
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE review_attempts
+            SET completed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (attempt_id,)
+        )
+
+        connection.commit()
+
+def count_due_concepts() -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM concepts
+            LEFT JOIN learning_state ON learning_state.concept_id = concepts.id
+            WHERE 
+                learning_state.next_review IS NULL
+                OR datetime(learning_state.next_review) <= datetime('now')
+            """
+        ).fetchone()
+
+    return row['count']
+
+def get_recent_review_stats(
+    days: int = 7
+):
+    modifier: str = f"-{days} days"
+
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                COUNT(*) AS review_count,
+                AVG(ai_correctness) AS average_correctness,
+                AVG(combined_score) AS average_score
+            FROM reviews
+            WHERE datetime(reviewed_at) >= datetime('now', ?)""",
+            (modifier,)
+        ).fetchone()
+
+def get_review_history(
+        limit:int = 50,
+        offset:int = 0
+):
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                reviews.id,
+                reviews.concept_id,
+                
+                concepts.heading,
+                notes.title AS note,
+                
+                reviews.question,
+                reviews.user_answer,
+                
+                reviews.ai_correctness,
+                reviews.ai_feedback,
+                
+                reviews.user_confidence,
+                reviews.combined_score,
+                
+                reviews.rating,
+                
+                reviews.reviewed_at
+            FROM reviews
+            
+            JOIN concepts ON concepts.id = reviews.concept_id
+            JOIN notes ON notes.id = concepts.note_id
+            
+            ORDER BY reviews.reviewed_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset)
+        ).fetchall()
+
+def get_review_activity(
+    days:int = 7
+):
+    modifier: str = f"-{days} days"
+
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                date(reviewed_at) AS day,
+                COUNT(*) AS reviews,
+                AVG(ai_correctness) AS average_correctness
+            FROM reviews
+            WHERE datetime(reviewed_at) >= datetime('now', ?)
+            GROUP BY date(reviewed_at)
+            ORDER BY day ASC
+            """,
+            (modifier,)
+        ).fetchall()  
