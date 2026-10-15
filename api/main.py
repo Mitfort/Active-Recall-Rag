@@ -144,7 +144,7 @@ def get_today_review():
 
     return DailyReviewRespone(
         due_count=len(concepts),
-        concepst=concepts
+        concepts=concepts
     )
 
 @app.post(
@@ -269,6 +269,7 @@ def submit_answer(
         verdict=evaluation.verdict,
 
         feedback=evaluation.feedback,
+        expected_answer=attempt["expected_answer"],
 
         missing_points=evaluation.missing_points,
         missconceptions=evaluation.missconceptions,

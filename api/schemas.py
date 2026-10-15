@@ -25,7 +25,7 @@ class ReviewConceptResponse(BaseModel):
 
 class DailyReviewRespone(BaseModel):
     due_count:int
-    concepst: list[ReviewConceptResponse]
+    concepts: list[ReviewConceptResponse]
 
 class QuestionResponse(BaseModel):
     attempt_id:int
@@ -49,6 +49,8 @@ class AnswerResponse(BaseModel):
     verdict:str 
 
     feedback:str
+
+    expected_answer:str 
 
     missing_points:list[str]
     missconceptions:list[str]
