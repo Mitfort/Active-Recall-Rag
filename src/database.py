@@ -1007,7 +1007,7 @@ def get_knowledge_rows():
             notes.subject as subject,
 
             COALESCE(learning_state.mastery, 0.0) AS mastery,
-            COALESCE(learning_state.stability_days, 1.0) AS stability_days
+            COALESCE(learning_state.stability_days, 1.0) AS stability_days,
             COALESCE(learning_state.review_count, 0) AS review_count,
 
             learning_state.last_reviewed,
@@ -1019,6 +1019,6 @@ def get_knowledge_rows():
         ORDER BY 
             notes.subject,
             notes.title,
-            notes.position
+            concepts.position
         """   
         ).fetchall()

@@ -479,7 +479,7 @@ def review_history(
 
 @app.get(
     "/knowledge",
-    response_model=list[KnowledgeResponse]
+    response_model=KnowledgeResponse
 )
 def get_knowledge():
 
@@ -532,7 +532,7 @@ def get_knowledge():
 
             notes.append(
                 KnowledgeNoteResponse(
-                    id=note_ids[(subject, note)],
+                    id=note_ids[(subject_name, note_title)],
                     title=note_title,
                     average_mastery=average_mastery,
                     average_retrievability=average_retrievability,
