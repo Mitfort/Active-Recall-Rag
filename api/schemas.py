@@ -116,3 +116,38 @@ class ReviewHistoryItem(BaseModel):
 
 class ReviewHistoryResponse(BaseModel):
     reviews: list[ReviewHistoryItem]
+
+
+class KnowledgeConceptResponse(BaseModel):
+    id:int
+    heading:str
+
+    mastery:float
+    retrievability:float
+
+    review_count:int
+
+class KnowledgeNoteResponse(BaseModel):
+    id:int
+    title:str
+
+    average_mastery:float
+    average_retrievability:float
+
+    concepts: list[KnowledgeConceptResponse]
+
+class KnowledgeSubjectResponse(BaseModel):
+    name:str 
+
+    concept_count:int
+    reviewed_count:int
+
+    average_mastery:float
+    average_retrievability:float
+
+    notes: list[KnowledgeNoteResponse]
+
+class KnowledgeResponse(BaseModel):
+    total_subjects:int 
+
+    subjects: list[KnowledgeSubjectResponse]

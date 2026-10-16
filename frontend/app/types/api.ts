@@ -94,3 +94,42 @@ export interface AnswerResult {
 
     next_review:string;
 }
+
+export interface KnowledgeConcept {
+    id: number;
+    heading: string;
+
+    mastery: number;
+    retrievability: number;
+
+    review_count: number;
+}
+
+export interface KnowledgeNote {
+    id: number;
+    title: string;
+
+    average_mastery: number;
+    average_retrievability: number;
+
+    concepts: KnowledgeConcept[];
+
+}
+
+export interface KnowledgeSubject {
+    name: string;
+
+    concepts_count: number;
+    review_count: number;
+
+    average_mastery: number;
+    average_retrievability: number;
+
+    notes: KnowledgeNote[];
+}
+
+export interface KnowledgeData {
+    total_subjects: number;
+
+    subjects: KnowledgeSubject[];
+}

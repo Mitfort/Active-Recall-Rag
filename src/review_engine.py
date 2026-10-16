@@ -46,7 +46,7 @@ def create_review_question(
 
     supporting_result = [
         result for result in supporting_result
-        if result['concept_id'] != concept['id']
+        if result['id'] != concept['id']
     ]
 
     target_result = {

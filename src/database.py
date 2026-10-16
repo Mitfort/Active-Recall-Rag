@@ -29,6 +29,7 @@ def initialize_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT NOT NULL UNIQUE,
                 title TEXT NOT NULL,
+                subject TEXT NOT NULL DEFAULT 'General',
                 content_hash TEXT NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -181,6 +182,16 @@ def initialize_database() -> None:
         except sqlite3.OperationalError:
             pass
 
+        try:
+            connection.execute(
+                """
+                ALTER TABLE notes
+                ADD COLUMN subject TEXT NOT NULL DEFAULT 'General'
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
 
 
 def get_note_by_file_path(
@@ -201,12 +212,13 @@ def insert_note(
     ) -> int:
     cursor = connection.execute(
         """
-        INSERT INTO notes (file_path, title, content_hash)
-        VALUES (?, ?, ?)
+        INSERT INTO notes (file_path, title,subject, content_hash)
+        VALUES (?, ?, ?, ?)
         """,
         (
             note.file_path,
             note.title,
+            note.subject,
             note.content_hash
         ),
     )
@@ -247,12 +259,14 @@ def update_note(
         UPDATE notes
         SET 
             title = ?, 
+            subject = ?,
             content_hash = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
             note.title,
+            note.subject,
             note.content_hash,
             note_id
         ),
@@ -734,7 +748,7 @@ def get_concept(concept_id: int) -> sqlite3.Row:
                 concepts.id,
                 concepts.heading,
                 concepts.content,
-                notes.title AS note,
+                notes.title AS note
             FROM concepts
 
             JOIN notes ON notes.id = concepts.note_id
@@ -978,3 +992,33 @@ def get_review_activity(
             """,
             (modifier,)
         ).fetchall()  
+
+
+def get_knowledge_rows():
+    with get_connection() as connection:
+        return connection.execute(
+        """
+        SELECT 
+            concepts.id,
+            concepts.heading,
+
+            notes.id AS note_id,
+            notes.title as note,
+            notes.subject as subject,
+
+            COALESCE(learning_state.mastery, 0.0) AS mastery,
+            COALESCE(learning_state.stability_days, 1.0) AS stability_days
+            COALESCE(learning_state.review_count, 0) AS review_count,
+
+            learning_state.last_reviewed,
+            learning_state.next_review
+        FROM concepts
+        JOIN notes ON notes.id = concepts.note_id
+        LEFT JOIN learning_state ON learning_state.concept_id = concepts.id
+
+        ORDER BY 
+            notes.subject,
+            notes.title,
+            notes.position
+        """   
+        ).fetchall()

@@ -2,7 +2,8 @@ import type {
     DashboardData,
     DailyReviewData,
     ReviewQuestion,
-    AnswerResult
+    AnswerResult,
+    KnowledgeData
  } from '../types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -79,6 +80,22 @@ export async function submitAnswer(
 
     if (!response.ok) {
         throw new Error("Failed to submit answer")
+    }
+
+    return response.json();
+}
+
+export async function getKnowledge(): Promise<KnowledgeData> {
+
+    const response = await fetch(
+        `${API_URL}/knowledge`,
+        {
+            cache: 'no-store'
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch knowledge data")
     }
 
     return response.json();

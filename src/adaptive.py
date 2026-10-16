@@ -34,11 +34,11 @@ def choose_review_strategy(
     recent_reviews: list[dict]
 ) -> ReviewStrategy:
 
-    mastery = float(state.get('mastery', 0))
+    mastery = float(state['mastery'])
 
     retrievability = calculate_retrievability(
-        last_review=state.get('last_reviewed'),
-        stability_days=state.get('stability_days', 0)
+        last_review=state['last_reviewed'],
+        stability_days=state['stability_days']
     )
 
     recent_misconceptions = []

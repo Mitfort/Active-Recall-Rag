@@ -16,7 +16,10 @@ class NoteChunk:
 class ParsedNote:
     file_name: str
     file_path: str
+    
     title: str
+    subject: str
+
     raw_content: str
     content_hash: str
     chunks: list[NoteChunk]
@@ -71,7 +74,7 @@ def split_into_sections(markdown: str) -> list[tuple[str, str]]:
 
     return [(title, cleaned)] if cleaned else []
 
-def process_note(path: Path) -> ParsedNote:
+def process_note(path: Path, subject: str) -> ParsedNote:
     markdown = read_markdown_file(path)
     title = extract_title(markdown)
     sections = split_into_sections(markdown)
@@ -95,6 +98,7 @@ def process_note(path: Path) -> ParsedNote:
         file_name=path.name,
         file_path=str(path),
         title=title,
+        subject=subject,
         raw_content=markdown,
         content_hash=content_hash,
         chunks=note_chunks
@@ -106,8 +110,17 @@ def load_notes(directory: str) -> list[ParsedNote]:
     notes = []
 
     for file_path in notes_directory.rglob("*.md"):
-        note = process_note(file_path)
 
+        relative_path = file_path.relative_to(
+            notes_directory
+        )
+
+        if len(relative_path.parts) > 1:
+            subject = relative_path.parts[0]
+        else:
+            subject = "General"
+
+        note = process_note(file_path, subject)
         notes.append(note)
 
     return notes

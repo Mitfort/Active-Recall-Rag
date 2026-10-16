@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from collections import defaultdict
 
 from src.database import (
     initialize_database,
@@ -14,7 +15,8 @@ from src.database import (
     count_due_concepts,
     get_recent_review_stats,
     get_review_activity,
-    get_review_history
+    get_review_history,
+    get_knowledge_rows
 )
 
 from src.scheduler import (
@@ -28,6 +30,7 @@ from api.schemas import (
     AnswerResponse,
     ConceptsResponse,
     DailyReviewRespone,
+
     ReviewConceptResponse,
     QuestionResponse,
     
@@ -36,7 +39,12 @@ from api.schemas import (
     ActivityDayResponse,
 
     ReviewHistoryItem,
-    ReviewHistoryResponse
+    ReviewHistoryResponse,
+
+    KnowledgeResponse,
+    KnowledgeNoteResponse,
+    KnowledgeConceptResponse,
+    KnowledgeSubjectResponse
 )
 
 from src.embeddings import (
@@ -153,7 +161,7 @@ def get_today_review():
 )
 def create_question(concept_id:int):
     try:
-       result = create_review_question(
+        result = create_review_question(
            concept_id=concept_id,
             embedding_model=embeding_model
        )
@@ -173,7 +181,7 @@ def create_question(concept_id:int):
             expected_answer=quetsion.expected_answer,
             difficulty=quetsion.dificulty,
             question_type=quetsion.question_type,
-            context=quetsion['context'],
+            context=result["context"],
             sources=result["sources"]
         ),
 
@@ -467,4 +475,100 @@ def review_history(
 
     return ReviewHistoryResponse(
         reviews=reviews,
+    )
+
+@app.get(
+    "/knowledge",
+    response_model=list[KnowledgeResponse]
+)
+def get_knowledge():
+
+    rows = get_knowledge_rows()
+
+    subjects_data = defaultdict(lambda: defaultdict(list))
+
+    note_ids = {}
+
+    for row in rows:
+        retrievability = calculate_retrievability(
+            last_review=row["last_reviewed"],
+            stability_days=row["stability_days"]
+        )
+
+        concept = {
+            "id": row["id"],
+            "heading": row["heading"],
+            "mastery": row["mastery"],
+            "retrievability": retrievability,
+            "review_count": row["review_count"]
+        }
+
+        subject = row["subject"]
+
+        note = row["note"]
+
+        subjects_data[subject][note].append(concept)
+
+        note_ids[(subject, note)] = row["note_id"]
+
+    subjects = []
+
+    for subject_name, notes_dict in subjects_data.items():
+        notes = []
+        subject_concepts = []
+
+        for note_title, concepts in notes_dict.items():
+            subject_concepts.extend(concepts)
+
+            average_mastery = (
+                sum(c["mastery"] for c in concepts) / len(concepts)
+                if concepts else 0.0
+            )
+
+            average_retrievability = (
+                sum(c["retrievability"] for c in concepts) / len(concepts)
+                if concepts else 0.0
+            )
+
+            notes.append(
+                KnowledgeNoteResponse(
+                    id=note_ids[(subject, note)],
+                    title=note_title,
+                    average_mastery=average_mastery,
+                    average_retrievability=average_retrievability,
+                    concepts=[
+                        KnowledgeConceptResponse(
+                            **concept
+                        )
+                        for concept in concepts
+                    ]
+                )
+            )
+
+        subject_mastery = sum(
+            c["mastery"] for c in subject_concepts
+        ) / len(subject_concepts) if subject_concepts else 0.0
+
+        subject_memory = sum(
+            c["retrievability"] for c in subject_concepts
+        ) / len(subject_concepts) if subject_concepts else 0.0
+
+        reviewed_count = sum(
+            1 for concept in subject_concepts if concept["review_count"] > 0
+        )
+
+        subjects.append(
+            KnowledgeSubjectResponse(
+                name=subject_name,
+                concept_count=len(subject_concepts),
+                reviewed_count=reviewed_count,
+                average_mastery=subject_mastery,
+                average_retrievability=subject_memory,
+                notes=notes
+            )
+        )
+
+    return KnowledgeResponse(
+        total_subjects=len(subjects),
+        subjects=subjects
     )
