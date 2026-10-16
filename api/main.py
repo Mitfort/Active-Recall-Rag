@@ -16,7 +16,9 @@ from src.database import (
     get_recent_review_stats,
     get_review_activity,
     get_review_history,
-    get_knowledge_rows
+    get_knowledge_rows,
+    get_note_metadata,
+    get_knowledge_graph,
 )
 
 from src.scheduler import (
@@ -572,3 +574,67 @@ def get_knowledge():
         total_subjects=len(subjects),
         subjects=subjects
     )
+
+
+@app.get(
+    "/notes/{note_id}",
+)
+def get_note(note_id:int):
+    note_metadata = get_note_metadata(note_id=note_id)
+
+    if note_metadata is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Note with ID {note_id} not found."
+        )
+
+    return note_metadata
+
+@app.get(
+    "/knowledge/graph",
+    response_model=dict
+)
+def knowledge_graph():
+    notes,links = get_knowledge_graph()
+
+    title_to_id = {
+        note["title"]: note["id"] for note in notes
+    }
+
+    nodes = [
+        {
+            "id": note["id"],
+            "label": note["title"],
+            "subject": note["subject"],
+            "type": "note"
+        }
+
+        for note in notes
+    ]
+
+    edges = []
+    unresolved = []
+
+    for link in links:
+        target_id = title_to_id.get(link['target_title'])
+
+        if target_id is None:
+            unresolved.append({
+                "source": link['source_note_id'],
+                "target_title": link['target_title']
+            })
+
+            continue 
+
+        edges.append({
+            "source": link['source_note_id'],
+            "target": target_id,
+            "heading": link['heading'],
+            "type": "wikilink"
+        })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "unresolved_links": unresolved
+    }

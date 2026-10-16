@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import hashlib 
 import re 
+import yaml 
 
 @dataclass
 class NoteChunk:
@@ -11,6 +12,12 @@ class NoteChunk:
     heading: str
     content: str
     position: int
+
+@dataclass 
+class WikiLink:
+    target: str
+    heading: str | None
+    alias: str | None 
 
 @dataclass
 class ParsedNote:
@@ -22,6 +29,12 @@ class ParsedNote:
 
     raw_content: str
     content_hash: str
+
+    metadata: dict
+
+    tags: list[str]
+    links: list[WikiLink]
+
     chunks: list[NoteChunk]
 
 def read_markdown_file(file_path: Path) -> str:
@@ -74,17 +87,29 @@ def split_into_sections(markdown: str) -> list[tuple[str, str]]:
 
     return [(title, cleaned)] if cleaned else []
 
-def process_note(path: Path, subject: str) -> ParsedNote:
-    markdown = read_markdown_file(path)
-    title = extract_title(markdown)
-    sections = split_into_sections(markdown)
+def process_note(path: Path, fallback_subject: str) -> ParsedNote:
+    raw_markdown = read_markdown_file(path)
 
-    content_hash = calculate_hash(markdown)
+    metadata, body = parse_frontmatter(raw_markdown)
 
-    note_chunks = []
+    title = extract_title(body)
+
+    subject = metadata.get("subject") or fallback_subject or "General"
+
+    subject = subject.strip()
+
+    tags = extract_tags(metadata, body)
+
+    links = extract_wikilinks(body)
+
+    content_hash = calculate_hash(raw_markdown)
+
+    sections = split_into_sections(body)
+
+    chunks = []
 
     for position, (heading, content) in enumerate(sections):
-        note_chunk = NoteChunk(
+        chunk = NoteChunk(
             file_name=path.name,
             file_path=str(path),
             title=title,
@@ -92,17 +117,21 @@ def process_note(path: Path, subject: str) -> ParsedNote:
             content=content,
             position=position
         )
-        note_chunks.append(note_chunk)
+        chunks.append(chunk)
 
     return ParsedNote(
         file_name=path.name,
         file_path=str(path),
         title=title,
         subject=subject,
-        raw_content=markdown,
+        raw_content=raw_markdown,
         content_hash=content_hash,
-        chunks=note_chunks
+        metadata=metadata,
+        tags=tags,
+        links=links,
+        chunks=chunks
     )
+
 
 def load_notes(directory: str) -> list[ParsedNote]:
     notes_directory = Path(directory)
@@ -116,11 +145,134 @@ def load_notes(directory: str) -> list[ParsedNote]:
         )
 
         if len(relative_path.parts) > 1:
-            subject = relative_path.parts[0]
+            fallback_subject = relative_path.parts[0]
         else:
-            subject = "General"
+            fallback_subject = "General"
 
-        note = process_note(file_path, subject)
+        note = process_note(file_path, fallback_subject=fallback_subject)
         notes.append(note)
 
     return notes
+
+def parse_frontmatter(
+    markdown: str
+) -> tuple[dict, str]:
+    """
+    Returns:
+    - metadata: dict
+    - markdown body without YAML frontmatter
+    """
+
+    if not markdown.startswith("---"):
+        return {}, markdown
+
+    match = re.match(
+        r"^---\s*\n(.*?)\n---\s*\n?(.*)$",
+        markdown,
+        re.DOTALL,
+    )
+
+    if not match: 
+        return {}, markdown
+
+    yaml_content = match.group(1)
+
+    body = match.group(2)
+
+    try:
+        metadata = yaml.safe_load(yaml_content) or {}
+
+    except yaml.YAMLError:
+        metadata = {}
+
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    return metadata, body
+
+def extract_tags(
+    metadata: dict,
+    markdown_body: str
+) -> list[str]:
+
+    tags = set()
+
+
+    ### FRONTMATTER TAGS 
+
+    metadata_tags = metadata.get("tags", [])
+
+    if isinstance(metadata_tags, str):
+        metadata_tags = [metadata_tags]
+
+    if isinstance(metadata_tags, list):
+        for tag in metadata_tags:
+            if isinstance(tag, str):
+                normalized = tag.strip().lstrip("#")
+
+                if normalized:
+                    tags.add(normalized)
+
+
+    ### INLINE TAGS
+
+    inline_tags = re.findall(
+        r"(?<!\w)#([A-Za-z0-9_\-/]+)",
+        markdown_body,
+    )
+
+    for tag in inline_tags:
+        normalized = tag.strip().lstrip("#")
+
+        if normalized:
+            tags.add(normalized)
+
+    return sorted(tags)
+
+def extract_wikilinks(
+    markdown_body: str 
+) -> list[WikiLink]:
+
+    raw_links = re.findall(
+        r"\[\[([^\]]+)\]\]",
+        markdown_body,
+    )
+
+    links: list[WikiLink] = []
+
+    for raw_link in raw_links:
+        alias = None 
+        heading = None 
+
+        target_part = raw_link
+
+        ## [[Target|Alias]]
+
+        if "|" in target_part:
+            target_part, alias = target_part.split("|", 1)
+            alias = alias.strip() or None
+
+        ## [[Target#Heading]]
+
+        if "#" in target_part:
+            target_part, heading = target_part.split("#", 1)
+            heading = heading.strip() or None
+
+        else:
+            target = target_part
+
+        target = target_part.strip()
+
+        if not target:
+            continue
+
+        links.append(
+            WikiLink(
+                target=target,
+                heading=heading,
+                alias=alias
+            )
+        )
+
+    return links
+

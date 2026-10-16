@@ -3,7 +3,7 @@ from pathlib import Path
 
 from src.ingestion import ParsedNote
 
-from datetime import datetime
+from datetime import datetime, date
 
 import json 
 
@@ -30,6 +30,7 @@ def initialize_database() -> None:
                 file_path TEXT NOT NULL UNIQUE,
                 title TEXT NOT NULL,
                 subject TEXT NOT NULL DEFAULT 'General',
+                metadata_json TEXT,
                 content_hash TEXT NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -111,6 +112,37 @@ def initialize_database() -> None:
                 )
             """
         )
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS note_tags (
+                note_id INTEGER NOT NULL,
+                
+                tag TEXT NOT NULL,
+                
+                PRIMARY KEY (note_id, tag),
+                
+                FOREIGN KEY (note_id)
+                    REFERENCES notes(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS note_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                
+                source_note_id INTEGER NOT NULL,
+                target_title TEXT NOT NULL,
+                
+                target_heading TEXT,
+                
+                alias TEXT,
+                
+                FOREIGN KEY (source_note_id)
+                    REFERENCES notes(id)
+                    ON DELETE CASCADE
+            )
+        """)
         
         connection.commit()
 
@@ -192,6 +224,15 @@ def initialize_database() -> None:
         except sqlite3.OperationalError:
             pass
 
+        try:
+            connection.execute(
+                """
+                ALTER TABLE notes
+                ADD COLUMN metadata_json TEXT
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
 
 
 def get_note_by_file_path(
@@ -210,20 +251,44 @@ def insert_note(
         connection: sqlite3.Connection,
         note: ParsedNote
     ) -> int:
+    def _serialize_metadata(obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, dict):
+            return {k: _serialize_metadata(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_serialize_metadata(v) for v in obj]
+        return obj
+
     cursor = connection.execute(
         """
-        INSERT INTO notes (file_path, title,subject, content_hash)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO notes (
+            file_path,
+            title,
+            subject, 
+            metadata_json, 
+            content_hash
+        )
+        VALUES (?, ?, ?, ?, ?)
         """,
         (
             note.file_path,
             note.title,
             note.subject,
+            json.dumps(_serialize_metadata(note.metadata), ensure_ascii=False),
             note.content_hash
         ),
     )
 
-    return cursor.lastrowid
+    note_id = cursor.lastrowid
+
+    sync_note_metadata(
+        connection,
+        note_id,
+        note
+    )
+
+    return note_id
 
 def insert_concept(
         connection: sqlite3.Connection,
@@ -254,12 +319,23 @@ def update_note(
         note_id: int,
         note: ParsedNote
     ) -> None:
+    
+    def _serialize_metadata(obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, dict):
+            return {k: _serialize_metadata(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_serialize_metadata(v) for v in obj]
+        return obj
+
     connection.execute(
         """
         UPDATE notes
         SET 
             title = ?, 
             subject = ?,
+            metadata_json = ?,
             content_hash = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -267,6 +343,7 @@ def update_note(
         (
             note.title,
             note.subject,
+            json.dumps(_serialize_metadata(note.metadata), ensure_ascii=False),
             note.content_hash,
             note_id
         ),
@@ -362,6 +439,12 @@ def update_note(
                 """,
                 (existing['id'],)
             )
+
+    sync_note_metadata(
+        connection,
+        note_id,
+        note
+    )
 
     # connection.execute(
     #     """
@@ -1022,3 +1105,142 @@ def get_knowledge_rows():
             concepts.position
         """   
         ).fetchall()
+
+def sync_note_metadata(
+    connection: sqlite3.Connection,
+    note_id: int,
+    note: ParsedNote
+) -> None:
+
+    ### TAGS 
+
+    connection.execute(
+        """
+        DELETE FROM note_tags
+        WHERE note_id = ?
+        """,
+        (note_id,)
+    )
+
+    for tag in note.tags:
+        connection.execute(
+            """
+            INSERT INTO note_tags (note_id, tag)
+            VALUES (?, ?)
+            """,
+            (note_id, tag)
+        )
+
+    ### WIKILINKS
+
+    connection.execute(
+        """
+        DELETE FROM note_links
+        WHERE source_note_id = ?
+        """,
+        (note_id,)
+    )
+
+    for link in note.links:
+        connection.execute(
+            """
+            INSERT INTO note_links (
+                source_note_id,
+                target_title,
+                target_heading,
+                alias
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                note_id,
+                link.target,
+                link.heading,
+                link.alias
+            )
+        )
+
+def get_note_metadata(note_id: int):
+    with get_connection() as connection:
+
+        note = connection.execute(
+            """
+            SELECT 
+                notes.id,
+                notes.title,
+                notes.subject,
+                notes.file_path,
+                notes.metadata_json
+            FROM notes
+            WHERE notes.id = ?
+            """,
+            (note_id,)
+        ).fetchone()
+
+        if note is None:
+            return None
+
+        tags = connection.execute(
+            """
+            SELECT tag
+            FROM note_tags
+            WHERE note_id = ?
+            ORDER BY tag
+            """,
+            (note_id,)
+        ).fetchall()
+
+        links = connection.execute(
+            """
+            SELECT 
+                target_title,
+                target_heading,
+                alias
+            FROM note_links
+            WHERE source_note_id = ?
+            ORDER BY target_title
+            """,
+            (note_id,)
+        ).fetchall()
+
+        return {
+            "id": note["id"],
+            "title": note["title"],
+            "subject": note["subject"],
+            "file_path": note["file_path"],
+            "metadata": json.loads(note["metadata_json"]) if note["metadata_json"] else {},
+            "tags": [tag["tag"] for tag in tags],
+            "links": [
+                {
+                    "target": row["target_title"],
+                    "heading": row["target_heading"],
+                    "alias": row["alias"]
+                }
+
+                for row in links
+            ],
+        }
+
+def get_knowledge_graph():
+    with get_connection() as connection:
+
+        notes = connection.execute(
+            """
+            SELECT 
+                id,
+                title,
+                subject
+            FROM notes
+            """
+        ).fetchall()
+
+        links = connection.execute(
+            """
+            SELECT 
+                source_note_id,
+                target_title,
+                target_heading
+            FROM note_links
+            """
+        ).fetchall()
+
+    return notes, links
