@@ -133,3 +133,55 @@ export interface KnowledgeData {
 
     subjects: KnowledgeSubject[];
 }
+
+// NOTE DETAILS
+export interface NoteWikiLink {
+    target: string;
+    heading: string | null;
+    alias: string | null;
+}
+
+export interface NoteDetails {
+    id: number;
+    title: string;
+    subject: string;
+
+    file_path: string;
+    metadata: Record<string, string>;
+
+    tags: string[];
+    links: NoteWikiLink[];
+}
+
+// KNOWLEDGE GRAPH
+
+export interface KnowledgeGraphNode {
+    id: number;
+    label: string;
+    subject: string;
+    type: "note";
+    mastery: number;
+    retrievability: number;
+    concept_count: number;
+    reviewed_count: number;
+}
+
+export interface KnowledgeGraphEdge {
+    source: number;
+    target: number;
+    type: "wikilink" | "semantic";
+
+    score: number | null;
+}
+
+export interface UnresolvedKnowledgeLink {
+    source: number;
+    target_title: string;
+}
+
+export interface KnowledgeGraphData {
+    nodes: KnowledgeGraphNode[];
+    edges: KnowledgeGraphEdge[];
+
+    unresolved_links: UnresolvedKnowledgeLink[];
+}

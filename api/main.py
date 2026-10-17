@@ -59,6 +59,10 @@ from src.evaluator import evaluate_answer
 
 from src.ingestion import load_notes
 
+from src.semantic_graph import (
+    find_semantic_note_relations
+)
+
 embeding_model = None 
 
 app: FastAPI = FastAPI(
@@ -597,20 +601,81 @@ def get_note(note_id:int):
 def knowledge_graph():
     notes,links = get_knowledge_graph()
 
-    title_to_id = {
-        note["title"]: note["id"] for note in notes
-    }
+    knowledge_rows = get_knowledge_rows()
 
-    nodes = [
-        {
+    # Aggregate concept-level learning state 
+    # into note-level state
+
+    note_stats = {}
+
+    for row in knowledge_rows:
+        note_id = row["note_id"]
+
+        retrievability = calculate_retrievability(
+            last_review=row["last_reviewed"],
+            stability_days=row["stability_days"]
+        )
+
+        if note_id not in note_stats:
+            note_stats[note_id] = {
+                "mastery_sum": 0.0,
+                "memory_sum": 0.0,
+                "concept_count": 0,
+                "reviewed_count": 0
+            }
+
+        stats = note_stats[note_id]
+
+        stats["mastery_sum"] += row["mastery"]
+        stats["memory_sum"] += retrievability
+        stats["concept_count"] += 1
+
+        if row["review_count"] > 0:
+            stats["reviewed_count"] += 1
+
+    ### BUILD Note nodes 
+
+    nodes = []
+
+    for note in notes:
+        stats = note_stats.get(note["id"], {
+            "mastery_sum": 0.0,
+            "memory_sum": 0.0,
+            "concept_count": 0,
+            "reviewed_count": 0
+        })
+
+        concept_count = stats["concept_count"]
+
+        average_mastery = (
+            stats["mastery_sum"] / concept_count
+            if concept_count > 0 else 0.0
+        )
+
+        average_memory = (
+            stats["memory_sum"] / concept_count
+            if concept_count > 0 else 0.0
+        )
+
+        reviewed_count = stats["reviewed_count"]
+
+        nodes.append({
             "id": note["id"],
             "label": note["title"],
             "subject": note["subject"],
-            "type": "note"
-        }
+            "type": "note",
+            "mastery": average_mastery,
+            "retrievability": average_memory,
+            "concept_count": concept_count,
+            "reviewed_count": reviewed_count
+        })
 
-        for note in notes
-    ]
+    ### RESOLVE Wikilinks into edges
+    title_to_id = {
+        note["title"]: note["id"] for note in notes
+    }
+    
+
 
     edges = []
     unresolved = []
@@ -630,11 +695,21 @@ def knowledge_graph():
             "source": link['source_note_id'],
             "target": target_id,
             "heading": link['heading'],
-            "type": "wikilink"
+            "type": "wikilink",
+            "score": None
         })
+
+    ### Find semantic relations between notes
+
+    semantic_edges = find_semantic_note_relations(
+        explicit_edges=edges,
+        threshold=0.72,
+        max_neighbors=3
+    )
+
 
     return {
         "nodes": nodes,
-        "edges": edges,
+        "edges": edges + semantic_edges,
         "unresolved_links": unresolved
     }

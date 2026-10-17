@@ -3,7 +3,9 @@ import type {
     DailyReviewData,
     ReviewQuestion,
     AnswerResult,
-    KnowledgeData
+    KnowledgeData,
+    KnowledgeGraphData,
+    NoteDetails
  } from '../types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -96,6 +98,39 @@ export async function getKnowledge(): Promise<KnowledgeData> {
 
     if (!response.ok) {
         throw new Error("Failed to fetch knowledge data")
+    }
+
+    return response.json();
+}
+
+// KNOWLEDGE GRAPH
+
+export async function getKnowledgeGraph(): Promise<KnowledgeGraphData> {
+    const response = await fetch(
+        `${API_URL}/knowledge/graph`,
+        {
+            cache: 'no-store'
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch knowledge graph data")
+    }
+
+    return response.json();
+}
+
+// NOTE DETAILS
+export async function getNoteDetails(noteId: number): Promise<NoteDetails> {
+    const response = await fetch(
+        `${API_URL}/notes/${noteId}`,
+        {
+            cache: 'no-store'
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch note details")
     }
 
     return response.json();

@@ -1244,3 +1244,28 @@ def get_knowledge_graph():
         ).fetchall()
 
     return notes, links
+
+def get_note_embedding_rows():
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                notes.id AS note_id,
+                notes.title AS note_title,
+                notes.subject,
+
+                concepts.id AS concept_id,
+                concepts.heading,
+                concepts.embedding    
+            
+            FROM notes
+
+            JOIN concepts ON concepts.note_id = notes.id
+
+            WHERE concepts.embedding IS NOT NULL
+
+            ORDER BY
+                notes.subject,
+                concepts.position
+            """
+        ).fetchall()

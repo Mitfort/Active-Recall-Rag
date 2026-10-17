@@ -20,7 +20,7 @@ export function AppNav() {
                     font-semibold
                     text-zinc-100
                 ">
-                    Recall
+                    Active Recall
                 </Link>
 
                 <Link href="/" className="
@@ -45,6 +45,14 @@ export function AppNav() {
                     hover:text-zinc-100
                 ">
                     Knowledge
+                </Link>
+
+                <Link href="/knowledge/graph" className="
+                    text-xm
+                    text-zinc-400
+                    hover:text-zinc-100
+                ">
+                    Graph 
                 </Link>
 
             </div>
