@@ -94,7 +94,7 @@ def find_semantic_note_relations(
             source_id = note_ids[i]
             target_id = note_ids[j]
 
-            pair = (source_id, target_id)
+            pair = tuple(sorted((source_id, target_id)))
 
             if pair in explicit_pairs:
                 continue

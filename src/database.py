@@ -467,6 +467,13 @@ def sync_note(note: ParsedNote) -> str:
             return "created"
 
         elif existing_note["content_hash"] == note.content_hash:
+            # Parser improvements must reach existing notes without rebuilding concepts.
+            connection.execute(
+                "UPDATE notes SET title = ?, subject = ? WHERE id = ?",
+                (note.title, note.subject, existing_note["id"]),
+            )
+            sync_note_metadata(connection, existing_note["id"], note)
+            connection.commit()
             return "unchanged"
 
 
@@ -1084,6 +1091,7 @@ def get_knowledge_rows():
         SELECT 
             concepts.id,
             concepts.heading,
+            concepts.content,
 
             notes.id AS note_id,
             notes.title as note,
@@ -1228,7 +1236,9 @@ def get_knowledge_graph():
             SELECT 
                 id,
                 title,
-                subject
+                subject,
+                file_path,
+                metadata_json
             FROM notes
             """
         ).fetchall()

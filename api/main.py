@@ -58,6 +58,7 @@ from src.review_engine import create_review_question
 from src.evaluator import evaluate_answer
 
 from src.ingestion import load_notes
+from src.knowledge_graph import build_knowledge_graph
 
 from src.semantic_graph import (
     find_semantic_note_relations
@@ -599,117 +600,26 @@ def get_note(note_id:int):
     response_model=dict
 )
 def knowledge_graph():
-    notes,links = get_knowledge_graph()
-
-    knowledge_rows = get_knowledge_rows()
-
-    # Aggregate concept-level learning state 
-    # into note-level state
-
-    note_stats = {}
-
-    for row in knowledge_rows:
-        note_id = row["note_id"]
-
-        retrievability = calculate_retrievability(
-            last_review=row["last_reviewed"],
-            stability_days=row["stability_days"]
-        )
-
-        if note_id not in note_stats:
-            note_stats[note_id] = {
-                "mastery_sum": 0.0,
-                "memory_sum": 0.0,
-                "concept_count": 0,
-                "reviewed_count": 0
-            }
-
-        stats = note_stats[note_id]
-
-        stats["mastery_sum"] += row["mastery"]
-        stats["memory_sum"] += retrievability
-        stats["concept_count"] += 1
-
-        if row["review_count"] > 0:
-            stats["reviewed_count"] += 1
-
-    ### BUILD Note nodes 
-
-    nodes = []
-
-    for note in notes:
-        stats = note_stats.get(note["id"], {
-            "mastery_sum": 0.0,
-            "memory_sum": 0.0,
-            "concept_count": 0,
-            "reviewed_count": 0
-        })
-
-        concept_count = stats["concept_count"]
-
-        average_mastery = (
-            stats["mastery_sum"] / concept_count
-            if concept_count > 0 else 0.0
-        )
-
-        average_memory = (
-            stats["memory_sum"] / concept_count
-            if concept_count > 0 else 0.0
-        )
-
-        reviewed_count = stats["reviewed_count"]
-
-        nodes.append({
-            "id": note["id"],
-            "label": note["title"],
-            "subject": note["subject"],
-            "type": "note",
-            "mastery": average_mastery,
-            "retrievability": average_memory,
-            "concept_count": concept_count,
-            "reviewed_count": reviewed_count
-        })
-
-    ### RESOLVE Wikilinks into edges
-    title_to_id = {
-        note["title"]: note["id"] for note in notes
-    }
-    
-
-
-    edges = []
-    unresolved = []
-
-    for link in links:
-        target_id = title_to_id.get(link['target_title'])
-
-        if target_id is None:
-            unresolved.append({
-                "source": link['source_note_id'],
-                "target_title": link['target_title']
-            })
-
-            continue 
-
-        edges.append({
-            "source": link['source_note_id'],
-            "target": target_id,
-            "heading": link['heading'],
-            "type": "wikilink",
-            "score": None
-        })
-
-    ### Find semantic relations between notes
-
-    semantic_edges = find_semantic_note_relations(
-        explicit_edges=edges,
-        threshold=0.72,
-        max_neighbors=3
+    notes, links = get_knowledge_graph()
+    graph = build_knowledge_graph(
+        [dict(note) for note in notes],
+        [dict(link) for link in links],
+        [dict(row) for row in get_knowledge_rows()],
     )
+    nodes = {node["id"]: node for node in graph["nodes"]}
+    # Semantic similarity compares notes, including links to their sections.
+    explicit_note_edges = []
+    for edge in graph["edges"]:
+        if edge["type"] != "wikilink":
+            continue
+        source = nodes[edge["source"]]["note_id"]
+        target = nodes[edge["target"]]["note_id"]
+        if source is not None and target is not None:
+            explicit_note_edges.append({"source": source, "target": target})
 
-
-    return {
-        "nodes": nodes,
-        "edges": edges + semantic_edges,
-        "unresolved_links": unresolved
-    }
+    graph["edges"].extend(find_semantic_note_relations(
+        explicit_edges=explicit_note_edges,
+        threshold=0.72,
+        max_neighbors=3,
+    ))
+    return graph

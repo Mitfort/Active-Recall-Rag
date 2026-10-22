@@ -156,10 +156,12 @@ export interface NoteDetails {
 // KNOWLEDGE GRAPH
 
 export interface KnowledgeGraphNode {
-    id: number;
+    id: number | string;
     label: string;
     subject: string;
-    type: "note";
+    type: "domain" | "topic" | "note" | "concept";
+    note_id: number | null;
+    depth: number;
     mastery: number;
     retrievability: number;
     concept_count: number;
@@ -167,15 +169,16 @@ export interface KnowledgeGraphNode {
 }
 
 export interface KnowledgeGraphEdge {
-    source: number;
-    target: number;
-    type: "wikilink" | "semantic";
+    source: number | string;
+    target: number | string;
+    type: "hierarchy" | "wikilink" | "semantic";
 
     score: number | null;
+    heading?: string | null;
 }
 
 export interface UnresolvedKnowledgeLink {
-    source: number;
+    source: number | string;
     target_title: string;
 }
 

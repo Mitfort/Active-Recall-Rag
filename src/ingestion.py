@@ -4,6 +4,13 @@ import hashlib
 import re 
 import yaml 
 
+ATTACHMENT_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif", ".ico",
+    ".pdf", ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".webm",
+    ".mov", ".avi", ".zip", ".doc", ".docx", ".xls", ".xlsx", ".ppt",
+    ".pptx", ".csv", ".txt", ".canvas", ".excalidraw",
+}
+
 @dataclass
 class NoteChunk:
     file_name: str
@@ -43,13 +50,13 @@ def read_markdown_file(file_path: Path) -> str:
 def calculate_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-def extract_title(markdown:str) -> str:
+def extract_title(markdown: str, fallback: str = "Untitled") -> str:
     match = re.search(r"^# (.+)$", markdown, re.MULTILINE)
 
     if match:
         return match.group(1).strip()
 
-    return "Untitled"
+    return fallback
 
 def split_into_sections(markdown: str) -> list[tuple[str, str]]:
     heading_pattern = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
@@ -92,7 +99,7 @@ def process_note(path: Path, fallback_subject: str) -> ParsedNote:
 
     metadata, body = parse_frontmatter(raw_markdown)
 
-    title = extract_title(body)
+    title = extract_title(body, fallback=path.stem)
 
     subject = metadata.get("subject") or fallback_subject or "General"
 
@@ -100,7 +107,7 @@ def process_note(path: Path, fallback_subject: str) -> ParsedNote:
 
     tags = extract_tags(metadata, body)
 
-    links = extract_wikilinks(body)
+    links = extract_wikilinks(body, current_note_title=title)
 
     content_hash = calculate_hash(raw_markdown)
 
@@ -230,12 +237,14 @@ def extract_tags(
     return sorted(tags)
 
 def extract_wikilinks(
-    markdown_body: str 
+    markdown_body: str,
+    *,
+    current_note_title: str | None = None,
 ) -> list[WikiLink]:
 
     raw_links = re.findall(
         r"\[\[([^\]]+)\]\]",
-        markdown_body,
+        _strip_link_examples(markdown_body),
     )
 
     links: list[WikiLink] = []
@@ -258,12 +267,11 @@ def extract_wikilinks(
             target_part, heading = target_part.split("#", 1)
             heading = heading.strip() or None
 
-        else:
-            target = target_part
-
         target = target_part.strip()
+        if not target and heading and current_note_title:
+            target = current_note_title
 
-        if not target:
+        if not target or Path(target).suffix.lower() in ATTACHMENT_EXTENSIONS:
             continue
 
         links.append(
@@ -276,3 +284,32 @@ def extract_wikilinks(
 
     return links
 
+
+def _strip_link_examples(markdown: str) -> str:
+    """Remove code and hidden comments before extracting note references."""
+    visible_lines = []
+    fence_character = None
+    fence_length = 0
+
+    for line in markdown.splitlines(keepends=True):
+        fence = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence_character is not None:
+            if (
+                fence
+                and fence.group(1)[0] == fence_character
+                and len(fence.group(1)) >= fence_length
+                and not line[fence.end():].strip()
+            ):
+                fence_character = None
+            continue
+
+        if fence:
+            fence_character = fence.group(1)[0]
+            fence_length = len(fence.group(1))
+            continue
+
+        visible_lines.append(line)
+
+    visible = "".join(visible_lines)
+    visible = re.sub(r"<!--.*?(?:-->|$)|%%.*?(?:%%|$)", "", visible, flags=re.DOTALL)
+    return re.sub(r"(`+).*?\1", "", visible, flags=re.DOTALL)

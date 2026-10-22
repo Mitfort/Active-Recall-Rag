@@ -98,11 +98,11 @@ export default function KnowledgeGraphPage() {
               text-zinc-400
             "
           >
-            Relationships discovered
-            from your Obsidian wikilinks.
-            Missing nodes represent
-            referenced topics that do
-            not yet have their own note.
+            Follow your notes from left to right: folder domains, tag topics,
+            notes, and their concepts. Wikilinks and semantic suggestions connect
+            related subjects across branches. Select a note or concept to see its
+            source note. Expand a note to show its concepts; missing notes show
+            unresolved references.
           </p>
 
         </header>
