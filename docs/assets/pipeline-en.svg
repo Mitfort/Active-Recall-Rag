@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:lang="en" width="1280" height="764" viewBox="0 0 1280 764" role="img" aria-labelledby="title desc">
+  <title id="title">Active Recall RAG — current pipeline</title>
+  <desc id="desc">Three stages: import Markdown into SQLite with embeddings; adaptively retrieve context and generate a question; evaluate the answer, update memory, and feed history back into the review strategy.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0c1425"/><stop offset="1" stop-color="#111827"/></linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 6 3 0 6" fill="none" stroke="#7486a3" stroke-width="1.4"/></marker>
+    <marker id="greenArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 6 3 0 6" fill="none" stroke="#5ee0bd" stroke-width="1.4"/></marker>
+    <style>
+      text{font-family:Segoe UI,Arial,sans-serif} .title{font-size:32px;font-weight:700;fill:#f1f5f9}.sub{font-size:16px;fill:#a8b6cc}.eyebrow{font-size:12px;font-weight:700;letter-spacing:2px}.label{font-size:19px;font-weight:600;fill:#eef4ff}.body{font-size:14px;fill:#b5c2d7}.tag{font-size:12px;fill:#9bacc6}.link{fill:none;stroke:#7486a3;stroke-width:2;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="764" rx="24" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1278" height="762" rx="23" fill="none" stroke="#26334a"/>
+  <text x="44" y="53" class="eyebrow" fill="#62d7f7">ACTIVE RECALL RAG</text>
+  <text x="44" y="99" class="title">From your own notes to lasting knowledge</text>
+  <text x="44" y="129" class="sub">Context from your materials • personalized questions • reviews informed by your answers</text>
+
+  <rect x="28" y="160" width="1224" height="150" rx="16" fill="#101e32"/>
+  <text x="48" y="188" class="eyebrow" fill="#62d7f7">01 / KNOWLEDGE PREPARATION</text>
+  <g fill="#132a40" stroke="#2d536b">
+    <rect x="48" y="205" width="254" height="82" rx="12"/><rect x="350" y="205" width="254" height="82" rx="12"/>
+    <rect x="652" y="205" width="254" height="82" rx="12"/><rect x="954" y="205" width="278" height="82" rx="12"/>
+  </g>
+  <text x="66" y="235" class="label">Markdown notes</text><text x="66" y="260" class="body">data/notes · files and folders</text>
+  <text x="368" y="235" class="label">Parser → concepts</text><text x="368" y="260" class="body">Sections · YAML · tags · wikilinks</text>
+  <text x="670" y="235" class="label">Sync + embeddings</text><text x="670" y="260" class="body">SHA-256 · all-MiniLM-L6-v2</text>
+  <text x="972" y="235" class="label">SQLite</text><text x="972" y="260" class="body">Content · vectors · learning state</text>
+  <path d="M302 246H340 M604 246H642 M906 246H944" class="link"/>
+
+  <rect x="28" y="326" width="1224" height="194" rx="16" fill="#1a1d36"/>
+  <text x="48" y="354" class="eyebrow" fill="#bda7ff">02 / ADAPTIVE QUESTION</text>
+  <g fill="#252441" stroke="#514776">
+    <rect x="48" y="373" width="208" height="82" rx="12"/><rect x="292" y="373" width="208" height="82" rx="12"/>
+    <rect x="536" y="373" width="208" height="82" rx="12"/><rect x="780" y="373" width="208" height="82" rx="12"/>
+    <rect x="1024" y="373" width="208" height="82" rx="12"/>
+  </g>
+  <text x="66" y="403" class="label">Daily queue</text><text x="66" y="428" class="body">New and due · limit 10</text>
+  <text x="310" y="403" class="label">Strategy</text><text x="310" y="428" class="body">Type · difficulty · focus</text>
+  <text x="554" y="403" class="label">Retrieval</text><text x="554" y="428" class="body">Cosine similarity</text>
+  <text x="798" y="403" class="label">RAG context</text><text x="798" y="428" class="body">Concept + up to 3 passages</text>
+  <text x="1042" y="403" class="label">LLM question</text><text x="1042" y="428" class="body">Ollama · qwen3:4b-instruct</text>
+  <path d="M256 414H282 M500 414H526 M744 414H770 M988 414H1014" class="link"/>
+  <text x="554" y="493" class="body" fill="#bda7ff">Wikipedia EN · up to 2 sources when enrichment is needed</text>
+  <path d="M884 484V465" class="link" stroke-dasharray="4 4"/>
+
+  <rect x="28" y="536" width="1224" height="150" rx="16" fill="#102a2a"/>
+  <text x="48" y="564" class="eyebrow" fill="#5ee0bd">03 / ANSWER AND MEMORY</text>
+  <g fill="#143735" stroke="#2e625a">
+    <rect x="48" y="583" width="208" height="82" rx="12"/><rect x="292" y="583" width="208" height="82" rx="12"/>
+    <rect x="536" y="583" width="208" height="82" rx="12"/><rect x="780" y="583" width="208" height="82" rx="12"/>
+    <rect x="1024" y="583" width="208" height="82" rx="12"/>
+  </g>
+  <text x="66" y="613" class="label">Your answer</text><text x="66" y="638" class="body">Answer + confidence 1–5</text>
+  <text x="310" y="613" class="label">LLM evaluation</text><text x="310" y="638" class="body">Gaps · misconceptions</text>
+  <text x="554" y="613" class="label">Learning score</text><text x="554" y="638" class="body" style="font-size:13px">Score · confidence · difficulty</text>
+  <text x="798" y="613" class="label">Scheduler</text><text x="798" y="638" class="body">Mastery · stability · next date</text>
+  <text x="1042" y="613" class="label">Save history</text><text x="1042" y="638" class="body">SQLite → dashboard</text>
+  <path d="M256 624H282 M500 624H526 M744 624H770 M988 624H1014" class="link"/>
+  <path d="M1093 287V319H640V373 M1128 455V528H600V573H152V583" class="link"/>
+  <path d="M1128 665V714H1264V363H396V373" fill="none" stroke="#5ee0bd" stroke-width="2" marker-end="url(#greenArrow)"/>
+  <text x="48" y="739" class="tag">ADAPTATION LOOP</text><text x="225" y="739" class="body">Saved history and memory state inform the strategy for the next question.</text>
+</svg>
